@@ -22,6 +22,7 @@ import os
 import h5py
 import sys
 
+# get the mat file from cli argv
 f = h5py.File(sys.argv[1],'r')
 
 # Radar specific parameters
@@ -50,29 +51,21 @@ for x in f.get('/adcRawData/data'):
     dataset = f[x[0]]
     dataset.read_direct(adc_data, dest_sel=np.s_[offset:offset+FRAME_LENGTH])
     offset += FRAME_LENGTH
-# print('########## adc_data ##########')
-# print(adc_data)
 
-# adc_data = adc_data.view(np.int16)
+# separate adc_data into frames
 adc_data = adc_data.reshape(NUM_FRAMES, -1)
-# print('########## adc_data reshaped ##########')
-# print(adc_data)
 
+# create `all_data` which formats data into complex samples
 def organize(raw_frame, num_chirps, num_rx, num_samples):
     ret = np.zeros(len(raw_frame) // 2, dtype=complex)
     for i in range(num_rx):
         ret[i::num_rx] = raw_frame[i::2*num_rx] + 1j * raw_frame[i+num_rx::2*num_rx]
     return ret.reshape((num_chirps, num_samples, num_rx)).swapaxes(1,2)
-
 all_data = np.apply_along_axis(organize, 1, adc_data, num_chirps=NUM_CHIRPS, num_rx=NUM_RX, num_samples=NUM_ADC_SAMPLES)
-# print('########## all_data ##########')
-# print('FRAME #1')
-# print(all_data[0])
-# print()
-# print('FRAME #299')
-# print(all_data[298])
+
+# assert that sizes match what is expected
 assert(len(all_data) == NUM_FRAMES)
-assert(len(all_data[0]) == NUM_CHIRPS)
+assert(len(all_data[0]) == NUM_CHIRPS) # in the sample code, NUM_CHIRPS is doubled for some reason...
 assert(len(all_data[0][0]) == NUM_RX)
 assert(len(all_data[0][0][0]) == NUM_ADC_SAMPLES)
 
@@ -81,7 +74,6 @@ range_azimuth = np.zeros((ANGLE_BINS, BINS_PROCESSED))
 num_vec, steering_vec = dsp.gen_steering_vec(ANGLE_RANGE, ANGLE_RES, VIRT_ANT)
 tracker = EKF()
 
-i = 0
 for frame in all_data:
     """ 1 (Range Processing) """
 
